@@ -232,3 +232,7 @@ function Remove-Office365Credential {
 
     Export-Clixml -InputObject $CurrentConfig -Path $ConfigPath
 }
+
+function Copy-ConnectExoCommand {
+	'$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential:(Get-Credential) -Authentication Basic -AllowRedirection; Import-PSSession $Session -DisableNameChecking' | clip
+}
