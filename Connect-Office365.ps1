@@ -88,15 +88,17 @@ function Connect-Office365 {
     if ($Services -contains "SCC") {
         Write-Host "Connecting to Security & Compliance Center"
 
-        $SccPrefix = ""
+        $SccSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.compliance.protection.outlook.com/powershell-liveid/ -Credential $credential -Authentication Basic -AllowRedirection -Name "O365SCCSESSION"
 
         if ($Services -contains "EXO") {
             Write-Host "Use ""cc"" as a prefix."            
             $SccPrefix = "cc"
-        }
 
-        $SccSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.compliance.protection.outlook.com/powershell-liveid/ -Credential $credential -Authentication Basic -AllowRedirection -Name "O365SCCSESSION"
-        Import-PSSession $SccSession -Prefix $SccPrefix -DisableNameChecking | Out-Null
+            Import-PSSession $SccSession -Prefix $SccPrefix -DisableNameChecking | Out-Null
+        }
+        else{
+            Import-PSSession $SccSession  -DisableNameChecking | Out-Null
+        }
     }
 
     if ($Services -contains "MSOnline") {
