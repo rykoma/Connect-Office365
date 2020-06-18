@@ -21,12 +21,14 @@ function Connect-Office365 {
         $Services = @("MSOnline", "EXO")
     )
 
+    Import-Module ExchangeOnlineManagement
+
     $ConfigPath = Join-Path -Path:([Environment]::GetFolderPath('MyDocuments')) -ChildPath "Office365Credential.xml"
 
     [pscredential]$Credential = $null
 
     if ($PSCmdlet.ParameterSetName -eq "UseSavedDefaultCredential") {
-        $DefaultUser = (Import-Clixml $ConfigPath) | ? {$_.IsDefault -eq $true}
+        $DefaultUser = (Import-Clixml $ConfigPath) | Where-Object {$_.IsDefault -eq $true}
 
         if ($DefaultUser) {
             $Credential = $DefaultUser.Credential
@@ -37,7 +39,7 @@ function Connect-Office365 {
         }
     }
     elseif ($PSCmdlet.ParameterSetName -eq "UseSavedCredential") {
-        $SavedUser = (Import-Clixml $ConfigPath) | ? {$_.Name -eq $SavedUserName}
+        $SavedUser = (Import-Clixml $ConfigPath) | Where-Object {$_.Name -eq $SavedUserName}
 
         if ($SavedUser) {
             $Credential = $SavedUser.Credential
@@ -63,14 +65,12 @@ function Connect-Office365 {
     catch {
     }
 
-    Get-PSSession -Name "O365EXOSESSION" -ErrorAction SilentlyContinue | Remove-PSSession
-    Get-PSSession -Name "O365SCCSESSION" -ErrorAction SilentlyContinue | Remove-PSSession
+    # Disconnect-ExchangeOnline -Confirm:$false *>&1 | Out-Null
 
     if ($Services -contains "EXO") {
         Write-Host "Connecting to Exchange Online"
 
-        $ExoSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $Credential -Authentication Basic -AllowRedirection -Name "O365EXOSESSION"
-        Import-PSSession $ExoSession -DisableNameChecking | Out-Null
+        Connect-ExchangeOnline -Credential $Credential -ShowProgress $true -ShowBanner:$false
     }
 
     if ($Services -contains "MSOnline") {
@@ -86,39 +86,38 @@ function Connect-Office365 {
     }
 
     if ($Services -contains "SCC") {
-        Write-Host "Connecting to Security & Compliance Center"
-
-        $SccSession = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://ps.compliance.protection.outlook.com/powershell-liveid/ -Credential $credential -Authentication Basic -AllowRedirection -Name "O365SCCSESSION"
-
         if ($Services -contains "EXO") {
-            Write-Host "Use ""cc"" as a prefix."            
-            $SccPrefix = "cc"
-
-            Import-PSSession $SccSession -Prefix $SccPrefix -DisableNameChecking | Out-Null
+            Write-Warning "You cannot connect to SCC and EXO at the same time."
         }
         else{
-            Import-PSSession $SccSession  -DisableNameChecking | Out-Null
+            Write-Host "Connecting to Security & Compliance Center"
+            Connect-IPPSSession -Credential $Credential
         }
     }
 
-    if ($Services -contains "MSOnline") {
-        Write-Host "Tenant Expiration Information"
+    # if ($Services -contains "MSOnline") {
+    #     Write-Host "Tenant Expiration Information"
 
-        $Now = (Get-Date).ToUniversalTime()
-        $SubscriptionInfo = Get-MsolSubscription | Select-Object SkuPartNumber, NextLifecycleDate
+    #     $Now = (Get-Date).ToUniversalTime()
+    #     $SubscriptionInfo = Get-MsolSubscription | Select-Object SkuPartNumber, NextLifecycleDate
 
-        foreach ($Subscription in $SubscriptionInfo) {
-            $DaysToExpiration = ($Subscription.NextLifecycleDate - $Now).TotalDays
+    #     foreach ($Subscription in $SubscriptionInfo) {
+    #         $DaysToExpiration = ($Subscription.NextLifecycleDate - $Now).TotalDays
 
-            if ($DaysToExpiration -le 30) {
-                if ($DaysToExpiration -ge 1) {
-                    Write-Host "$($Subscription.SkuPartNumber) will be expired in $DaysToExpiration days."
-                }
-                else {
-                    Write-Host "$($Subscription.SkuPartNumber) is expired."
-                }
-            }
-        }
+    #         if ($DaysToExpiration -le 30) {
+    #             if ($DaysToExpiration -ge 1) {
+    #                 Write-Host "$($Subscription.SkuPartNumber) will be expired in $DaysToExpiration days."
+    #             }
+    #             else {
+    #                 Write-Host "$($Subscription.SkuPartNumber) is expired."
+    #             }
+    #         }
+    #     }
+    # }
+
+    if ($Services -contains "EXO" -or $Services -contains "SCC") {
+        Write-Host "Checking if a newer version of ExchangeOnlineManagement module is available..."
+        Test-ExchangeOnlineManagementModuleVersion
     }
 }
 
@@ -237,4 +236,33 @@ function Remove-Office365Credential {
 
 function Copy-ConnectExoCommand {
 	'$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential:(Get-Credential) -Authentication Basic -AllowRedirection; Import-PSSession $Session -DisableNameChecking' | clip
+}
+
+function Test-ExchangeOnlineManagementModuleVersion {
+    $InstalledModules = Get-Module ExchangeOnlineManagement -ListAvailable
+
+    $InstalledVersion = New-Object System.Version(0, 0, 0, 0)
+
+    foreach ($Module in $InstalledModules) {
+        if ($Module.Version -gt $InstalledVersion) {
+            $InstalledVersion = $Module.Version
+        }
+    }
+
+    $LatestModules = Find-Module ExchangeOnlineManagement
+    $LatestVersion = New-Object System.Version(0, 0, 0, 0)
+
+    foreach ($Module in $LatestModules) {
+        if ($Module.Version -gt $LatestVersion) {
+            $LatestVersion = $Module.Version
+        }
+    }
+
+    if ($LatestVersion -gt $InstalledVersion) {
+        Write-Host "New ExchangeOnlineManagement module is available. Run 'Uninstall-Module ExchangeOnlineManagement -AllVersions; Install-Module -Name ExchangeOnlineManagement' from an elevated Windows PowerShell window."
+        $LatestModules | Format-Table -AutoSize
+    }
+    else {
+        Write-Host "You are using the latest ExchangeOnlineManagement module."
+    }
 }
