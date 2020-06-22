@@ -116,8 +116,8 @@ function Connect-Office365 {
     # }
 
     if ($Services -contains "EXO" -or $Services -contains "SCC") {
-        Write-Host "Checking if a newer version of ExchangeOnlineManagement module is available..."
-        Test-ExchangeOnlineManagementModuleVersion
+        $ModuleVersion = (Get-Module ExchangeOnlineManagement).Version
+        Write-Host "You are using ExchangeOnlineManagement version $($ModuleVersion.ToString()) to connect Exchange Online or Security Compliance Center. If you want to check if the newer module is available, run 'Test-ExchangeOnlineManagementModuleVersion' cmdlet."
     }
 }
 
@@ -239,6 +239,8 @@ function Copy-ConnectExoCommand {
 }
 
 function Test-ExchangeOnlineManagementModuleVersion {
+    Write-Progress -Activity "Checking if a newer version of ExchangeOnlineManagement module is available." -Status "Loading installed modules." -PercentComplete 10
+
     $InstalledModules = Get-Module ExchangeOnlineManagement -ListAvailable
 
     $InstalledVersion = New-Object System.Version(0, 0, 0, 0)
@@ -249,6 +251,8 @@ function Test-ExchangeOnlineManagementModuleVersion {
         }
     }
 
+    Write-Progress -Activity "Checking if a newer version of ExchangeOnlineManagement module is available..." -Status "Running 'Find-Module ExchangeOnlineManagement" -PercentComplete 20
+
     $LatestModules = Find-Module ExchangeOnlineManagement
     $LatestVersion = New-Object System.Version(0, 0, 0, 0)
 
@@ -257,6 +261,8 @@ function Test-ExchangeOnlineManagementModuleVersion {
             $LatestVersion = $Module.Version
         }
     }
+
+    Write-Progress -Activity "Checking if a newer version of ExchangeOnlineManagement module is available." -Completed
 
     if ($LatestVersion -gt $InstalledVersion) {
         Write-Host "New ExchangeOnlineManagement module is available. Run 'Uninstall-Module ExchangeOnlineManagement -AllVersions; Install-Module -Name ExchangeOnlineManagement' from an elevated Windows PowerShell window."
